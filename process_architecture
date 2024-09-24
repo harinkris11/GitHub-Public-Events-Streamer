@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     A[GitHub Public Events API] --> B[Kafka Producer on EC2];
     B --> C[Kafka Broker on EC2];
@@ -6,3 +7,4 @@ graph TD
     E --> F[AWS Glue];
     F --> G[S3 Bucket for Processed Data];
     G --> H[AWS Athena for Querying];
+```
