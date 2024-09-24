@@ -88,3 +88,110 @@ The real-time analytics results are visualized on a **dashboard** using tools li
 - **Fault Tolerance**: Kafka ensures that the data stream is replicated across multiple brokers, enabling fault tolerance. This makes the system resilient to failures during data transmission.
 - **Scalability**: Kafka’s partitioning and replication mechanisms allow for scaling as the volume of GitHub events increases.
 - **Real-Time Data Pipeline**: By using Kafka, this project creates a real-time pipeline for continuously ingesting and analyzing GitHub events without delays.
+
+## AWS Ecosystem for Kafka Data Streaming and Analytics
+
+This project leverages various AWS services to stream and analyze GitHub Public Events data in real-time. Below is the detailed architecture:
+
+### 1. **EC2 Instance for Kafka Producer & Consumer**
+The Kafka producer and consumer are hosted on an Amazon EC2 instance. This provides the flexibility to handle high-throughput streaming of GitHub events.
+
+- **Instance Setup:**
+  - EC2 is provisioned with enough CPU and memory resources to support Kafka's message processing.
+  - Kafka is installed and running on the EC2 instance.
+  - To facilitate the development process, JupyterHub is deployed on the local machine and connects to the EC2 instance for easy access to the Kafka producer and consumer.
+
+#### **Steps to Connect JupyterHub to EC2 Instance**
+- First, ensure the EC2 instance is running and SSH access is enabled.
+- Open JupyterHub on your local machine and establish an SSH tunnel to the EC2 instance.
+  
+```bash
+ssh -i "your-ec2-key.pem" -L 8888:localhost:8888 ec2-user@<ec2-instance-ip>
+```
+
+- Now you can access your Jupyter notebook in the browser and use it to interact with the Kafka producer and consumer running on EC2.
+
+### 2. **Kafka Producer & Consumer Setup**
+
+- The producer reads real-time GitHub Public Events data and streams it into Kafka.
+- The consumer listens to the topic and processes these events.
+
+#### **Kafka Producer**
+The Kafka producer is responsible for sending GitHub Public Events to the Kafka broker.
+
+```python
+from kafka import KafkaProducer
+import json
+
+producer = KafkaProducer(
+    bootstrap_servers=['<EC2-Kafka-Broker-IP>:9092'],
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+message = {'event_type': 'PushEvent', 'repo': 'octocat/Hello-World'}
+producer.send('github_events', value=message)
+producer.flush()
+```
+
+#### **Kafka Consumer**
+The Kafka consumer reads messages from the Kafka topic and prints them for processing.
+
+```python
+from kafka import KafkaConsumer
+
+consumer = KafkaConsumer(
+    'github_events',
+    bootstrap_servers=['<EC2-Kafka-Broker-IP>:9092'],
+    auto_offset_reset='earliest',
+    enable_auto_commit=True,
+    value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+)
+
+for message in consumer:
+    print(f"Received message: {message.value}")
+```
+
+### 3. **AWS Glue for Data Processing**
+AWS Glue is used for ETL (Extract, Transform, Load) operations on the streaming data. After the Kafka consumer reads the GitHub event messages, the data is written to S3. AWS Glue is then triggered to process this data.
+
+- **AWS Glue Jobs:**
+  - AWS Glue extracts raw event data from the S3 bucket.
+  - Transformations are applied (e.g., parsing the event type and repository information).
+  - The processed data is stored back in another S3 bucket.
+
+```python
+import boto3
+
+glue = boto3.client('glue')
+response = glue.start_job_run(JobName='github_events_etl')
+```
+
+### 4. **Athena for Querying Processed Data**
+AWS Athena is used to query the processed data stored in S3. Athena allows for serverless querying of the data using standard SQL.
+
+- **Athena Setup:**
+  - The Glue catalog is used to define the schema of the data.
+  - Athena queries are written to extract insights like top repositories, contributors, and event trends.
+
+```sql
+SELECT event_type, COUNT(*) 
+FROM github_events
+GROUP BY event_type;
+```
+
+### 5. **Architecture Diagram**
+
+```mermaid
+graph TD
+    A[GitHub Public Events API] --> B[Kafka Producer on EC2];
+    B --> C[Kafka Broker on EC2];
+    C --> D[Kafka Consumer on EC2];
+    D --> E[S3 Bucket for Raw Data];
+    E --> F[AWS Glue];
+    F --> G[S3 Bucket for Processed Data];
+    G --> H[AWS Athena for Querying];
+```
+
+### Conclusion
+
+This project demonstrates how to stream real-time data from GitHub using Kafka, process it with AWS Glue, and run analytics using AWS Athena. The architecture is highly scalable and allows for handling large volumes of streaming data while performing real-time analytics efficiently.
